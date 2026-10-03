@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lerza Player Security Hub</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans selection:bg-purple-500/30">
+  <div id="app"></div>
+
+  <script>
+    const TURSO_URL = "https://faraz-farazmunawar.aws-ap-south-1.turso.io/v2/pipeline";
+    const TURSO_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTEwMzQ5MzYsImlkIjoiMDFhMGZjZjMtYTAwMS03OWMzLThlNmQtOTZlODY5YzUxN2RjIiwia2lkIjoiTzl5UXVSOHV6Tjc3ZHhxaUtkTVZ5WGNTYnhlNW9PWjFXWm41Z09vaFVxOCIsInJpZCI6ImNkODAzNjcwLWYxZTUtNDc2MC1iZjE5LTQ4MWY4NmZiZjAzYSJ9.DCnIUR3T8njv1OdDzx0Jas07nYTjPupnWJdiHCkNdzyxCeD0ScSWRoY9TKbbvZvx9QgnxCbYI1kbAzGtGe52Cg";
+    const ADMIN_PASSWORD = "$FARAZSAJJADMUNAWAR1344@";
+
+    let isAuthenticated = sessionStorage.getItem("lerza_unlocked") === "true";
+    let devices = [];
+
+    function render() {
+      const app = document.getElementById("app");
+      if (!isAuthenticated) {
+        app.innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+            <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="w-full max-w-md bg-white/[0.04] border border-white/10 p-8 rounded-3xl backdrop-blur-2xl text-center space-y-6 shadow-2xl relative z-10">
+              <div class="w-16 h-16 mx-auto bg-gradient-to-tr from-purple-600 to-teal-400 rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-purple-500/30">
+                🛡️
+              </div>
+              <div class="space-y-1">
+                <h2 class="text-2xl font-extrabold text-white">Lerza Player ایڈمن پینل</h2>
+                <p class="text-xs text-slate-400">ہائی سیکیورٹی پورٹل میں لاگ ان کریں</p>
+              </div>
+              <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input type="password" id="pwdInput" placeholder="پاس ورڈ درج کریں..." class="w-full bg-slate-900 border border-white/10 text-white py-3.5 px-4 rounded-2xl text-center font-mono outline-none focus:border-purple-500">
+                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 text-white font-bold py-3.5 rounded-2xl shadow-xl hover:opacity-95 transition">
+                  ان لاک کریں
+                </button>
+              </form>
+            </div>
+          </div>
+        `;
+      } else {
+        const now = Date.now();
+        const onlineCount = devices.filter(d => (now - d.lastActiveTime) < 300000).length;
+        const totalReinstalls = devices.filter(d => d.reinstallCount > 0 || d.previousPlaytimeMin > 0).length;
+
+        app.innerHTML = `
+          <header class="p-4 border-b border-white/10 flex justify-between items-center bg-slate-950/70 backdrop-blur sticky top-0 z-50">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-teal-400 flex items-center justify-center text-lg">🛡️</div>
+              <div>
+                <h1 class="text-base font-bold text-white">Lerza Player Hub (Live Turso)</h1>
+                <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Active Database Connection
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="fetchDevices()" class="text-xs bg-white/5 border border-white/10 text-slate-300 px-3 py-2 rounded-xl hover:bg-white/10">ریفریش</button>
+              <button onclick="handleLogout()" class="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl hover:bg-rose-500/30">لاک کریں</button>
+            </div>
+          </header>
+
+          <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="bg-white/[0.03] border border-white/10 p-5 rounded-2xl">
+                <div class="text-xs text-slate-400">لائیو آن لائن یوزرز</div>
+                <div class="text-3xl font-extrabold text-emerald-400 mt-1">${onlineCount}</div>
+              </div>
+              <div class="bg-white/[0.03] border border-white/10 p-5 rounded-2xl">
+                <div class="text-xs text-slate-400">کل رجسٹرڈ موبائلز</div>
+                <div class="text-3xl font-extrabold text-white mt-1">${devices.length}</div>
+              </div>
+              <div class="bg-white/[0.03] border border-white/10 p-5 rounded-2xl">
+                <div class="text-xs text-slate-400">ری انسٹال شدہ (Re-installs)</div>
+                <div class="text-3xl font-extrabold text-teal-400 mt-1">${totalReinstalls}</div>
+              </div>
+            </div>
+
+            <div class="bg-white/[0.02] border border-white/10 rounded-3xl overflow-hidden p-5 space-y-4">
+              <h3 class="font-bold text-base text-white">تمام موبائلز اور پلے ٹائم کی تفصیلات</h3>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-right">
+                  <thead>
+                    <tr class="border-b border-white/10 text-slate-400">
+                      <th class="py-3 px-4">موبائل ماڈل</th>
+                      <th class="py-3 px-4">ڈیوائس ID</th>
+                      <th class="py-3 px-4">انسٹالیشن</th>
+                      <th class="py-3 px-4">سابقہ فکسڈ ٹائم</th>
+                      <th class="py-3 px-4">نیا پلے ٹائم</th>
+                      <th class="py-3 px-4">کل پلے ٹائم</th>
+                      <th class="py-3 px-4">کھولنے کی تعداد</th>
+                      <th class="py-3 px-4">حالت</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${devices.length === 0 ? '<tr><td colspan="8" class="text-center py-8 text-slate-500">کوئی موبائل رجسٹر نہیں ہے</td></tr>' : ''}
+                    ${devices.map(d => {
+                      const isLive = (now - d.lastActiveTime) < 300000;
+                      const isRe = d.reinstallCount > 0 || d.previousPlaytimeMin > 0;
+                      return `
+                        <tr class="border-b border-white/5 hover:bg-white/[0.02]">
+                          <td class="py-3 px-4 font-bold text-white">${d.model}</td>
+                          <td class="py-3 px-4 font-mono text-[11px] text-purple-300">${d.deviceId}</td>
+                          <td class="py-3 px-4">
+                            ${isRe ? '<span class="px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[10px]">🔁 Re-installed</span>' : '<span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px]">Original</span>'}
+                          </td>
+                          <td class="py-3 px-4 text-slate-400">${d.previousPlaytimeMin > 0 ? d.previousPlaytimeMin + ' منٹ' : '0 منٹ'}</td>
+                          <td class="py-3 px-4 font-bold text-emerald-400">${d.previousPlaytimeMin > 0 ? '+' + (d.audioPlaytimeMin + d.videoPlaytimeMin) : (d.audioPlaytimeMin + d.videoPlaytimeMin)} منٹ</td>
+                          <td class="py-3 px-4 font-extrabold text-white">${d.totalPlaytimeMin} منٹ</td>
+                          <td class="py-3 px-4 font-bold text-indigo-300">${d.sessionCount} بار</td>
+                          <td class="py-3 px-4">${isLive ? '<span class="text-emerald-400 font-bold">آن لائن</span>' : '<span class="text-slate-500">آف لائن</span>'}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </main>
+        `;
+      }
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const val = document.getElementById("pwdInput").value;
+      if (val === ADMIN_PASSWORD) {
+        isAuthenticated = true;
+        sessionStorage.setItem("lerza_unlocked", "true");
+        fetchDevices();
+      } else {
+        alert("غلط پاس ورڈ!");
+      }
+    }
+
+    function handleLogout() {
+      isAuthenticated = false;
+      sessionStorage.removeItem("lerza_unlocked");
+      render();
+    }
+
+    async function fetchDevices() {
+      try {
+        const res = await fetch(TURSO_URL, {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + TURSO_TOKEN, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requests: [{ type: "execute", stmt: { sql: "SELECT device_id, device_model, device_manufacturer, android_version, app_version, app_language, audio_playtime_minutes, video_playtime_minutes, total_playtime_minutes, previous_playtime_minutes, reinstall_count, session_count, first_install_time, last_active_time, updated_at FROM devices WHERE device_id NOT LIKE 'test_%' ORDER BY last_active_time DESC;" } }]
+          })
+        });
+        const data = await res.json();
+        const rows = data?.results?.[0]?.response?.result?.rows || [];
+        devices = rows.map(r => ({
+          deviceId: r[0]?.value || '',
+          model: r[1]?.value || 'Unknown',
+          audioPlaytimeMin: Number(r[6]?.value || 0),
+          videoPlaytimeMin: Number(r[7]?.value || 0),
+          totalPlaytimeMin: Number(r[8]?.value || 0),
+          previousPlaytimeMin: Number(r[9]?.value || 0),
+          reinstallCount: Number(r[10]?.value || 0),
+          sessionCount: Number(r[11]?.value || 1),
+          lastActiveTime: Number(r[13]?.value || Date.now())
+        }));
+        render();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (isAuthenticated) fetchDevices(); else render();
+  </script>
+</body>
+</html>
